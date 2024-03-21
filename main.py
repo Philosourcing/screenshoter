@@ -1,10 +1,13 @@
 import tkinter as tk
+from tkinter import scrolledtext
 import threading
 import random
 import time
 import pyautogui
 from PIL import ImageGrab
 import requests
+from io import BytesIO
+from datetime import datetime
 
 class ScreenshotApp:
     def __init__(self, master):
@@ -32,7 +35,21 @@ class ScreenshotApp:
         self.server_entry = tk.Entry(master)
         self.server_entry.pack()
 
-        self.interval = None
+        self.log_label = tk.Label(master, text="Logs:")
+        self.log_label.pack()
+        self.log_text = scrolledtext.ScrolledText(master, height=10, width=50, state='disabled')
+        self.log_text.pack()
+
+        # Configure tags for text colors
+        self.log_text.tag_config('error', foreground='red')
+        self.log_text.tag_config('success', foreground='green')
+
+        # Set default values
+        self.min_entry.insert(0, "0")
+        self.max_entry.insert(0, "20")
+        self.server_entry.insert(0, "https://philosourcing.com/screenshots/upload.php")
+
+        self.interval = 20  # Default value for interval
         self.capture_thread = None
         self.is_running = False
 
@@ -54,20 +71,32 @@ class ScreenshotApp:
             self.start_button.config(state=tk.NORMAL)
             self.stop_button.config(state=tk.DISABLED)
 
+    def log(self, message, color='black'):
+        current_time = datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
+        self.log_text.config(state='normal')
+        self.log_text.insert(tk.END, f"{current_time} {message}\n", color)
+        self.log_text.config(state='disabled')
+        self.log_text.see(tk.END)  # Auto-scroll to the bottom of the text widget
+
     def capture_screenshots(self, server_url):
         while self.is_running:
             # Capture screenshot
             screenshot = ImageGrab.grab()
+
+            # Convert screenshot to bytes
+            img_byte_arr = BytesIO()
+            screenshot.save(img_byte_arr, format='PNG')
+            img_byte_arr = img_byte_arr.getvalue()
             
             # Send screenshot to server
             try:
-                response = requests.post(server_url, files={"image": screenshot})
+                response = requests.post(server_url, files={"image": img_byte_arr})
                 if response.status_code == 200:
-                    print("Screenshot sent successfully")
+                    self.log("Screenshot sent successfully", 'success')
                 else:
-                    print(f"Failed to send screenshot. Status code: {response.status_code}")
+                    self.log(f"Failed to send screenshot. Status code: {response.status_code}", 'error')
             except Exception as e:
-                print(f"Error occurred while sending screenshot: {e}")
+                self.log(f"Error occurred while sending screenshot: {e}", 'error')
 
             # Simulate random interval between captures
             time.sleep(self.interval)
